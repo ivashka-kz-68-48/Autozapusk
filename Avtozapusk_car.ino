@@ -28,7 +28,7 @@ const char MQTT_user[10] = "00000000";      // api.cloudmqtt.com > Details > Use
 const char MQTT_pass[15] = "00000000";  // api.cloudmqtt.com > Details > Password
 const char MQTT_type[15] = "MQIsdp";        // тип протокола НЕ ТРОГАТЬ !
 const char MQTT_CID[15] = "a0000000o";        // уникальное имя устройства в сети MQTT
-String MQTT_SERVER = "m20.cloudmqtt.com";   // api.cloudmqtt.com > Details > Server  сервер MQTT брокера
+String MQTT_SERVER = "m00.cloudmqtt.com";   // api.cloudmqtt.com > Details > Server  сервер MQTT брокера
 String PORT = "000000";                      // api.cloudmqtt.com > Details > Port    порт MQTT брокера НЕ SSL !
 
 
