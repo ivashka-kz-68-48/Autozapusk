@@ -180,7 +180,7 @@ void detection() {                                         // условия п�
     }
     inDS++;
   }
-  /*                        раскоментировать для вывода в монитор состояния датчиков */
+  
   for (int i = 0; i < inDS; i++) Serial.print("Temp"), Serial.print(i), Serial.print("= "), Serial.println(TempDS[i]);
   Serial.println("")  ;
 
