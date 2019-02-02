@@ -51,7 +51,7 @@ int interval = 2;                           // интервал oтправки 
 bool heating = false;                       // переменная состояния режим прогрева двигателя
 bool ring = false;                          // флаг момента снятия трубки
 bool broker = false;                        // статус подклюлючения к брокеру
-bool Security ;                      // состояние охраны после подачи питания
+bool Security = false;                      // состояние охраны после подачи питания
 
 void setup() {
   wdt_enable (WDTO_8S);
