@@ -5,9 +5,10 @@
 #include <avr/wdt.h>
 
 SoftwareSerial SIM800(15, 14);                  //  пины RX,TX связь с сим 800
-#define ONE_WIRE_BUS 16                         // A2 пин датчика DS18B20, библиотека тут https://github.com/PaulStoffregen/OneWire     
+#define ONE_WIRE_BUS 16                         // A2 пин датчика DS18B20, библиотека тут https://github.com/PaulStoffregen/OneWire   
+                                                //  2 нога тахометр и датчик удара  
 const int Open_Door   =  3 ;                    // концевик дверей
-const int RESET_Pin   =  4 ;                    // ПОДКЛЮЧЕННАЯ НОГА ПРОВОДКОМ НА ТРАНЗИСТОР дёргающая reset
+const int RESET_Pin   =  4 ;                    // нога дёргающая reset через транзистор
 const int SIG_Pin     =  5 ;                    // К1 на плате  реле обход сигналки
 //#define IMMO        =  6 ;                      // реле иммобилайзера
 //#define SECOND_P                                // реле АСС
