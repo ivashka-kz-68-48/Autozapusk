@@ -1,13 +1,13 @@
 #include <EEPROM.h>
-
 #include <SoftwareSerial.h>
 #include <DallasTemperature.h>      // https://github.com/milesburton/Arduino-Temperature-Control-Library
 #include <avr/wdt.h>
 
 SoftwareSerial SIM800(15, 14);                  //  пины RX,TX связь с сим 800
-#define ONE_WIRE_BUS 16                         // A2 пин датчика DS18B20, библиотека тут https://github.com/PaulStoffregen/OneWire     
+#define ONE_WIRE_BUS 16                         // A2 пин датчика DS18B20, библиотека тут https://github.com/PaulStoffregen/OneWire 
+const int Tacho_Pin   =  2  ;                   // TACHO на плате тахометр и датчик удара   
 const int Open_Door   =  3 ;                    // концевик дверей
-const int RESET_Pin   =  4 ;                    // ПОДКЛЮЧЕННАЯ НОГА ПРОВОДКОМ НА ТРАНЗИСТОР дёргающая reset
+const int RESET_Pin   =  4 ;                    // пин через транзистор дергающий reset
 const int SIG_Pin     =  5 ;                    // К1 на плате  реле обход сигналки
 //#define IMMO        =  6 ;                      // реле иммобилайзера
 //#define SECOND_P                                // реле АСС
@@ -16,12 +16,11 @@ const int STARTER_Pin =  8 ;                    // К3 на плате реле 
 const int Lock_Pin    =  9 ;                    // К4 на плате пульт  на кнопку "заблокировать дверь"
 const int Unlock_Pin  =  10 ;                   // К5 на плате на пульт  на кнопку "разблокировать дверь"
 const int K4          =  11 ;                   // К6 на плате на реле K5  печка
-const int K5          =  12 ;                   // К7 на плате на реле К4 магнитола ,регистратор
-const int K6          =  13 ;                   // К8 на плате при перезагрузке мк будет дёргаться...на реле К6 кресла
+const int K5          =  12 ;                   // К7 на плате на реле сиденья
+const int K6          =  13 ;                   // К8 на плате при перезагрузке мк будет дёргаться...
 const int Pso_F       =  A3 ;                   // 17 на плате неподписаный вывод подключен к центральному замку инфа о состоянии
 const int STOP_Pin    =  A4 ;                   // 18 вход IN3 на концевик педали тормоза для отключения режима прогрева
 const int Feedback_Pin = A5 ;                   // 19  обратная связь по реле K3, проверка на включенное зажигание
-const int Tacho_Pin   =  2  ;                   // TACHO на плате обратная связь  проверка на ключ в замке
 const int BAT_Pin     =  A7 ;                   // 21  внутри платы соединен с +12, через делитель напряжения 39кОм / 11 кОм
 
 OneWire oneWire(ONE_WIRE_BUS);
@@ -43,16 +42,16 @@ String call_phone = "+790000000";       // телефон для DTMF коман
 
 /*  ----------------------------------------- ДАЛЕЕ НЕ ТРОГАЕМ ---------------------------------------------------------------   */
 int oxrana ;                            // Переменные для записи данных
-int eeAddress = 0;                      // в энергонезависимую память
+int eeAddress = 1;                      // в энергонезависимую память
 
 unsigned long Check_time = 0;          // та
 float Tacho_ChekTime = 0;              // хо
 int Tacho_impulse_count;               // ме
 int RPM ;                              // тр
 
-float Vstart = 13.00 ;                      // порог распознавания момента запуска по напряжению  = 13.00
+float Vstart = 13.30 ;                      // порог распознавания момента запуска по напряжению  = 13.30 не стоит устанавливать порог ниже ,акб после поездки выдаёт напругу выше 13 v соответственно запуска не будет
 String pin = "";                            // строковая переменная набираемого пинкода
-float TempDS[4];                            // массив хранения температуры c рахных датчиков
+float TempDS[4];                            // массив хранения температуры c датчиков температуры
 float Vbat, V_min;                          // переменная хранящая напряжение бортовой сети
 float m = 64.50;                            // делитель для перевода АЦП в вольты для резистров 100/47kOm 65.01=12.48 67.01=12.29
 int  inDS, error_CF, error_C;               //  термометр , ошибки
@@ -62,7 +61,7 @@ bool heating = false;                       // переменная состоя
 //bool ring = false;                          // флаг снятия трубки, не работает 
 bool broker = false;                        // статус подключения к брокеру
 bool Locking, Secury = false;                     // состояние охраны после подачи питания
-uint32_t  des, mni, Time1, Time2, timer1, timer2, timer3 ; 
+uint32_t  des, mni, Time1, Time2, timer1, timer2, timer3 ;   // таймеры
 bool  flagTemp, flagFail, flagStop, flagZap, flagsm, flagDozvona, flagCalm = false; // фла
 bool gethit, flagBusy, flagData, flagRpm, flagWork, flagVolt, flagErr = false;      // ги
 
@@ -100,7 +99,7 @@ void loop()
   wdt_reset();
 
   if (SIM800.available()) {
-    resp_modem();                                   // если что-то пришло от SIM800 в Ардуино отправляем для разбора
+    resp_modem();                                    // если что-то пришло от SIM800 в Ардуино отправляем для разбора
   }
   if (Serial.available()) {
     resp_serial();                                 // если что-то пришло от Ардуино отправляем в SIM800
@@ -144,7 +143,7 @@ void loop()
   }
 }
 
-float Calc_RPM() {   // Тахометр стырил у https://www.drive2.ru/users/borstch/
+float Calc_RPM() {
   detachInterrupt(0); // запретили считать
   Tacho_ChekTime = millis() - Check_time; // время между снятиями показаний счетчика
   if (Tacho_impulse_count > 0) { // и наличия насчитанных импульсов (на нолик делить не желательно.. будут запредельные значения в RPM)
@@ -191,13 +190,13 @@ void  zapusk() {
   }
 
   if (timer1 == 200) {               // даём бензонасосу поднять давление в рампе
-    digitalWrite(STARTER_Pin, HIGH);  // включаем стартер
-    // Serial.println(" Давай порвём твой бендикс !");  раскоментировать на время  отладки
+    digitalWrite(STARTER_Pin, HIGH);
+    // Serial.println(" Давай порвём твой бендикс !");  раскоментировать для отладки
   }
 
   if (timer1 < 197 && timer1 > 152) {   // после запуска стартера отслеживаем обороты или напругу
-    if (Calc_RPM() > 600 ) {                      // закоментировать строчку если нет возможности
-      //if (VoltRead() > Vstart) {                // подключиться к тахометру, отслеживать запуск по генератору
+    if (Calc_RPM() > 600 ) {   // закоментировать строчку если нет возможности
+      //if (VoltRead() > Vstart) {                        // подключиться к тахометру, отслеживать запуск по генератору
       digitalWrite(STARTER_Pin, LOW);
       timer1 = 150;
     }
@@ -211,7 +210,7 @@ void  zapusk() {
     // if ( VoltRead() > Vstart) {         //  проверяем напругу , если она в норме то считаем что двиг запущен
     if (Calc_RPM() > 600) {   // либо проверяем обороты , если они в норме то считаем что двиг запущен
       Timer = 20;
-      // Serial.println("Engine work");  раскомментировать для отладки
+      // Serial.println("Engine work"); // раскомментировать для отладки
       heating = true;            // меняем статус запуска
       flagRpm = true;            // отправляем данные об оборотах , если завелась.
       flagData = true;           // данные для отправки статус и таймер
@@ -221,18 +220,14 @@ void  zapusk() {
 
   if (timer1 == 80) {
     flagZap = true;
-  // if ( VoltRead() < Vstart) {     // даём время генератору поднять напряжение в сети.
-   // flagFail = true;    // считаем запуск неудачным если напруга не поднялась, сообщение "Err.start"
-   // heatingstop();
- //}
 }
 }
 //-----------------------------------программа остановки прогрева двигателя----------------------------------------------------------------------------------
 void heatingstop() {
   detachInterrupt(0);    // отключаем считывание оборотов
-  heating = false;       // снимаем флаг запуска
-  flagData = true;       // флаг отправки типа сообщения
-  Timer = 0;             // обнуляем таймер прогрева
+  heating = false;
+  flagData = true;
+  Timer = 0;
   digitalWrite(K4, LOW);
   digitalWrite(K6, LOW);
   //digitalWrite(IMMO_Pin, LOW),       delay (100);
@@ -241,7 +236,7 @@ void heatingstop() {
   digitalWrite(FIRST_Pin, LOW);
   delay (200);
   digitalWrite(SIG_Pin, LOW);
-  Data();                 
+  Data();
   //Serial.println ("All OFF");
 }
 /* ----------------------------------------  условия проверяемые каждые 10 сек  ------------------------------------------------- */
@@ -251,9 +246,11 @@ void detection() {
   Serial.println(interval);
   // Serial.println(Timer);
   if (VoltRead() > Vstart) {
+    detachInterrupt(0);
+    delay(50);
     attachInterrupt(0, TachoImpulse_on, RISING);
- //   Serial. print ("RPM  ");          // раскоментировать для отображения оборотов  
- //   Serial.println (Calc_RPM());      // в сом порте
+  //  Serial. print ("RPM  ");
+   // Serial.println (Calc_RPM());
   }
 
   if (RPM < 600) {
@@ -297,16 +294,16 @@ void detection() {
   //if (heating == true && TempDS[1] > 90) {      // остановить прогрев если температура выше 90 град
   //heatingstop();
   //}
-  oxrana = EEPROM.read(eeAddress);
-  if (oxrana == 1) {
-    Secury = true;
+  oxrana = EEPROM.read(eeAddress);              // считываем память 
+  if (oxrana == 1) {                            // если там "1" 
+    Secury = true;                              // то ставим на охрану 
   }
   else {
     Secury = false;
   }
 
- // Serial.print ("EEPROM  ");      // раскоментировать на время отладки
- // Serial.println (oxrana);        //
+ //Serial.print ("EEPROM  ");    // раскоментировать для проверки записи в еепром
+ // Serial.println (oxrana);
 
 
   if ( analogRead ( Pso_F  ) > 200) {           // для того чтобы было видно открыт ли ЦЗ вне функций lock
@@ -315,15 +312,14 @@ void detection() {
   else {
     Locking = true ;
   }
-  
-  if (interval == 4 ) {            // если звонок не прошёл пробуем дозвониться
+  if (interval == 4 ) {
     if (flagDozvona == true ) {
       timer2 = 300;
     }
   }
-  if (interval < 4 ) {            // флаг определяет если с момента отправки сообщения прошло немного 
-    flagsm = true;                // времени то сразу зноним, иначе сперва отправляем сообщение
-  }                               // на сервер для того, чтобы GPRS соединение не терялось 
+  if (interval < 4 ) {
+    flagsm = true;
+  }
   else flagsm = false;
   interval--;
   if (interval < 1) {
@@ -339,45 +335,45 @@ void Data() {
   delay (200);
   if (flagCalm == true) {
     flagCalm = false;
-    MQTT_PUB("s", Secury ? "Alarm" : "Calm" );      // состояние охраны GSM  
+    MQTT_PUB("s", Secury ? "Alarm" : "Calm" );
   }
   if (flagData == true) {
     flagData = false;
-    MQTT_PUB("s", heating ? "Start" : "Stop");     // статус прогрева
+    MQTT_PUB("s", heating ? "Start" : "Stop");
     MQTT_FloatPub("timer",    Timer, 0 );
   }
-  if ( flagTemp == true) {                         // флаг отправки данных с термодатчиков 
-    flagTemp = false;  
+  if ( flagTemp == true) {
+    flagTemp = false;
     ds();
   }
-  if (flagRpm == true) {                          // данные о оборотах движка
+  if (flagRpm == true) {
     flagRpm = false;
     MQTT_FloatPub("RPM", RPM, 0 );
   }
-  if (flagVolt == true) {                        // данные АКБ
+  if (flagVolt == true) {
     flagVolt = false;
     MQTT_FloatPub("bat",     Vbat, 2);
   }
   if (flagStop == true) {
     flagStop = false;
-    MQTT_PUB("s", "Neitral" );                  // флаг отсутсвия нейтрали
+    MQTT_PUB("s", "Neitral" );      // флаг отсутсвия нейтрали
   }
   if (flagWork == true) {
     flagWork = false;
-    MQTT_PUB("s",   "Eng.work" );               // флаг запущенного движка
+    MQTT_PUB("s",   "Eng.work" );   // флаг запущенного движка
   }
   if (flagErr == true) {
     flagErr = false;
-    MQTT_PUB("s",   "Err.Gen" );                // флаг низкого напряжения
+    MQTT_PUB("s",   "Err.Gen" );    // флаг низкого напряжения
   }
   if (flagFail == true) {
     flagFail = false;
-    MQTT_PUB("s",   "Err.start" );             // флаг неудачного запуска
+    MQTT_PUB("s",   "Err.start" );  // флаг неудачного запуска
   }
   SIM800.write(0x1A);
   interval = 6;
 }
-//---------------------------------------------функция вольтметра-----------------------------------------------------------------------------------------------
+//---------------------------------функция вольтметра-----------------------------------------------------------------------------------------------
 float VoltRead() {
   float ADCC = analogRead(BAT_Pin);
   ADCC = ADCC / m ;
@@ -387,7 +383,7 @@ float VoltRead() {
     return (ADCC);
   }
 }
-//-------------------------------------------------- ниже не стоит менять данные ни при каких обстоятельствах -----------------------------------------------
+//--------------------------------------------------ниже не стоит менять данные-----------------------------------------------
 void resp_serial() {
   String at = "";
   int k = 0;
@@ -414,7 +410,7 @@ void MQTT_CONNECT() {
   MQTT_SUB("S8/settimer");                                                        // пакет подписки на присылаемые значения таймера
   SIM800.write(0x1A),  broker = true;                                              // маркер завершения пакета
 }
-//------------------------------пакет публикации------------------------------------------------------------------
+//----------------------пакет публикации------------------------------------------------------------------
 void  MQTT_PUB(const char MQTT_topic[15], const char MQTT_messege[15]) {      // пакет на публикацию
   SIM800.write(0x30), SIM800.write(strlen(MQTT_topic) + strlen(MQTT_messege) + 2);
   SIM800.write((byte)0), SIM800.write(strlen(MQTT_topic)), SIM800.write(MQTT_topic); // топик
@@ -426,7 +422,7 @@ void  MQTT_SUB(const char MQTT_topic[15]) {                                     
   SIM800.write(strlen(MQTT_topic)), SIM800.write(MQTT_topic);                      // топик
   SIM800.write((byte)0);
 }
-//----------------------------анализируем порт модема------------------------------
+//---------------------анализируем порт модема------------------------------
 void resp_modem() {
   String at = "";
   int k = 0;
@@ -447,7 +443,7 @@ void resp_modem() {
   else if (at.indexOf("SMS Ready") > -1 || at.indexOf("NO CARRIER") > -1) { // Активируем АОН и декодер DTMF
     SIM800.println("AT+CLIP=1;+DDET=1");
   }
-  /*  -------------------------------------- проверяем соеденение с тырнетам, конектимся к серверу------------------------------------------------------- */
+  /*  -------------------------------------- проверяем соеденение с тырнетами, конектимся к серверу------------------------------------------------------- */
   else if (at.indexOf("+SAPBR: 1,3") > -1) {
     SIM800.println("AT+SAPBR=3,1,\"CONTYPE\",\"GPRS\""), delay(200);
   }
@@ -470,7 +466,7 @@ void resp_modem() {
     error_CF++;                                                   // костыль 4
     if (error_CF > 5) {
       // error_CF = 0,
-      MKrestart();              // перезагрузка котроллера если много ошибок
+      MKrestart();                   // перезагрузка котроллера если много ошибок
       SIM800.println("AT+CFUN=1,1");
     }
   }
@@ -478,7 +474,7 @@ void resp_modem() {
     MQTT_CONNECT();
   }
 
-  else if (at.indexOf("+CIPGSMLOC: 0,") > -1) {  //   локация
+  else if (at.indexOf("+CIPGSMLOC: 0,") > -1) {    //   локация работает хреново, никакой точности
     String LOC = at.substring(26, 35) + "," + at.substring(16, 25);
     SIM800.println("AT+CIPSEND");
     delay(200);
@@ -494,16 +490,16 @@ void resp_modem() {
     interval = 6 ;
   }
 
-  else if (at.indexOf("S8/settimer", 4) > -1) {   // изменение параметров таймера
+  else if (at.indexOf("S8/settimer", 4) > -1) {          //  функция изменение параметров таймера
     Timer = at.substring(at.indexOf("") + 15, at.indexOf("") + 18).toInt();
   }
 
-  else if (at.indexOf("ALREAD") > -1) {          // данные которые отправляем раз в минуту
-    SIM800.println("AT+CIPSEND");
+  else if (at.indexOf("ALREAD") > -1) {   // если сервер готов     
+    SIM800.println("AT+CIPSEND");         // данные которые отправляем раз в минуту
     delay(200);
     // MQTT_FloatPub("ds2",      TempDS[2], 2);  // сюда можно подставить любую строчку с отправкой данных
-    MQTT_FloatPub("timer",    Timer, 0 );    //  эта строка с минимальным количеством данных
-    if (heating == true) {
+    MQTT_FloatPub("timer",    Timer, 0 );    //  эта строка с минимальным количеством данных 1 байт , термометры, вольтметры 5 байт
+    if (heating == true) {                   // если автозапуск активен то отправляем боьше данных
       ds();
       MQTT_FloatPub("bat", Vbat, 2);
       MQTT_FloatPub("timer",    Timer, 0 );
@@ -512,39 +508,38 @@ void resp_modem() {
     SIM800.write(0x1A);
   }
 
-  else if (at.indexOf("S/bat", 4) > -1) {   // по касанию иконки акб обновляется её инфа
+  else if (at.indexOf("S/bat", 4) > -1) {       // по касанию "иконки" акб в приложении обновляется её инфа
     flagVolt = true;
     Data();
   }
 
-  else if (at.indexOf("S/ds2", 4) > -1) {  // по касанию иконки температуры приходят данные с датчиков
+  else if (at.indexOf("S/ds2", 4) > -1) {       // по касанию "иконки" температуры в приложении приходят данные с датчиков
     flagTemp = true;
     Data();
   }
 
-  else if (at.indexOf("S/Reset", 4) > -1) {           // рестарт контролллера
+  else if (at.indexOf("S/Reset", 4) > -1) {          // рестарт контролллера
     MKrestart();
   }
 
-  else if (at.indexOf("BUSY") > -1) {                 // флаг отбоя звонка
+  else if (at.indexOf("BUSY") > -1) {               // флаг отбоя звонка
     flagBusy = true;
   }
 
-  else if (at.indexOf("NO CARRIER") > -1) {
+  else if (at.indexOf("NO CARRIER") > -1) {         // флаг неудачного прозвона
     flagDozvona = true ;
   }
 
-  else if (at.indexOf("S/Alarm", 4) > -1) {
+  else if (at.indexOf("S/Alarm", 4) > -1) {         // команда постановки на охрану по GSM 
     if (VoltRead() < Vstart) {
-      detachInterrupt(0);
+      detachInterrupt(0);                           // на всякий отключаем прерывание если перед этим был активен тахометр
       delay(50);
       oxrana = 1;
       EEPROM.update(eeAddress, oxrana);
-      attachInterrupt(1, callback, LOW);                //  (1, callback, CHANGE);
-      attachInterrupt(0, hitback, LOW);
+      attachInterrupt(1, callback, LOW);            //  считываем прерывание с концевика дверей
+      attachInterrupt(0, hitback, LOW);             // считываем прерывание с датчика удара
       gethit = false;
       Secury = true;
-      Serial.println ("OK");
     }
     else {
       flagCalm = true;
@@ -552,18 +547,18 @@ void resp_modem() {
     }
   }
 
-  else if (at.indexOf("S/Calm", 4) > -1) {           // Silence , Hush
+  else if (at.indexOf("S/Calm", 4) > -1) {            // отключаем охрану
     void Silence ();
   }
 
-  else if (at.indexOf("S/Lock", 4) > -1) {            // команда постановки на охрану и включения прерывания по концевикам дверей
+  else if (at.indexOf("S/Lock", 4) > -1) {            // команда закрытия дверей
     if (heating == true) {                            // если прогрев вкл то отключаем сигу
       digitalWrite(SIG_Pin , HIGH);
     }
     blocking(1);
     delay(3000);                                      // задержка для того чтобы сигналка успела отдуплиться
     if ( analogRead ( Pso_F  ) > 200) {               // 450 расчёт для дениса для меня 300
-      Locking = false ;                              // если центральный замок не закрылся посылаем инфу
+      Locking = false ;                               // если центральный замок не закрылся посылаем инфу
       SIM800.println("AT+CIPSEND");
       delay (200);
       oxr();
@@ -572,7 +567,7 @@ void resp_modem() {
     }
   }
 
-  else if (at.indexOf("S/Unlock", 4) > -1) {          // команда снятия с охраны и отключения прерывания на концевик дверей
+  else if (at.indexOf("S/Unlock", 4) > -1) {          // команда на открытие дверей
     blocking(0);
     delay(3000);
     Secury = false;
@@ -636,33 +631,44 @@ void resp_modem() {
     interval = 6;                   // швырнуть данные на сервер и ждать 60 сек
     //  at = "";                            // Возвращаем ответ модема в монитор порта , очищаем переменную
   }
-  if (pin.indexOf("123") > -1)      {
+  if (pin.indexOf("123") > -1) {                    // функция автозапуска 
     pin = "";
     enginestart();
+    otboi();
   }
-  else if (pin.indexOf("777") > -1) {
-    pin = "";
-    SIM800.println("AT+CFUN=1,1");          // костыль 3
-    SIM800.println("AT+VTS=1,9,1,9");
-  }
-  else if (pin.indexOf("789") > -1) {
+
+  else if (pin.indexOf("789") > -1) {                // функция остановки прогрева
     pin = "";
     delay(150);
-    SIM800.println("ATH0");
     heatingstop();
+    otboi();
   }
   else if (pin.indexOf("#") > -1) {
-    pin = "", SIM800.println("ATH0");
+    pin = ""; 
+    otboi();
   }
-  else if (pin.indexOf("000") > -1) {
+    else if (pin.indexOf("777") > -1) {              // функция перезагрузки модуля связи
+    pin = "";
+    SIM800.println("AT+CFUN=1,1");         
+    SIM800.println("AT+VTS=1,9,1,9");
+    otboi();
+  }
+  else if (pin.indexOf("000") > -1) {              // функция перезагрузки микроконтроллера
     pin = "";
     MKrestart();
   }
+   else if (pin.indexOf("345") > -1){              // функция снятия с охраны по DTMF
+     Silence();
+     otboi();
+   }
+}
+void otboi(){                                      // функция сброса вызова
+  SIM800.println("ATH0");
 }
 void oxr() {
-  MQTT_PUB("s", Locking ? "Lock" : "Unlock");
+  MQTT_PUB("s", Locking ? "Lock" : "Unlock");         
 }
-void ds() {
+void ds() {                                        // функция отправки данных с термометров
   MQTT_FloatPub("ds2",      TempDS[2], 2);
   MQTT_FloatPub("ds0",      TempDS[0], 2);
   MQTT_FloatPub("ds1",      TempDS[1], 2);
@@ -684,7 +690,7 @@ void Anti_Hijack() {
   // Serial.println(" ARMED ");
 }
 
-void MKrestart() {
+void MKrestart() {                                // функция перезагрузки мк
   // Serial.println("Restart");
   digitalWrite(RESET_Pin, HIGH );
 }
@@ -713,22 +719,23 @@ void dozvon() {
 
   if (timer2 == 2 ) {
     if (flagBusy == false) {
-      SIM800.println("ATHO");
+      otboi();
     }
     else {
       flagBusy = false;
     }
   }
 }
-void hitback() {
+void hitback() {                // функция в случае срабатыания датчика удара
   gethit = true;
   timer2 = 300;
 }
- void Silence(){
+ void Silence(){               // функция снятия с охраны gsm
     detachInterrupt(1);
     detachInterrupt(0);
     oxrana = 0;
-    EEPROM.update (eeAddress, oxrana);
+    delay(50);
     Secury = false;
     gethit = false;
+    EEPROM.update (eeAddress, oxrana);
  }
