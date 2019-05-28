@@ -42,7 +42,7 @@ String call_phone = "+790000000";       // телефон для DTMF коман
 
 /*  ----------------------------------------- ДАЛЕЕ НЕ ТРОГАЕМ ---------------------------------------------------------------   */
 int oxrana ;                            // Переменные для записи данных
-int eeAddress = 1;                      // в энергонезависимую память
+int eeAddress = 0;                      // в энергонезависимую память
 
 unsigned long Check_time = 0;          // та
 float Tacho_ChekTime = 0;              // хо
@@ -58,10 +58,10 @@ int  inDS, error_CF, error_C;               //  термометр , ошибк�
 int Timer   = 0;                            // таймер прогрева
 int interval = 2;                           // интервал oтправки данных на сервер после загрузки ардуино
 bool heating = false;                       // переменная состояния режим прогрева двигателя
-//bool ring = false;                          // флаг снятия трубки, не работает 
+bool ring = false;                          // флаг снятия трубки, не работает 
 bool broker = false;                        // статус подключения к брокеру
 bool Locking, Secury = false;                     // состояние охраны после подачи питания
-uint32_t  des, mni, Time1, Time2, timer1, timer2, timer3 ;   // таймеры
+uint32_t  des, mni, Time1, Time2, timer1, timer2, timer3, minyta, Chas ;   // таймеры
 bool  flagTemp, flagFail, flagStop, flagZap, flagsm, flagDozvona, flagCalm = false; // фла
 bool gethit, flagBusy, flagData, flagRpm, flagWork, flagVolt, flagErr = false;      // ги
 
@@ -89,7 +89,7 @@ void setup() {
   Serial.begin(9600);                       //скорость порта
 
   SIM800.begin(9600);                       //скорость связи с модемом
-  //  Serial.println("MQTT |20/03/2019");                 // 15.12.2018
+  //  Serial.println("MQTT |28/05/2019");                 // 04.04.2018
   delay(100);
   SIM800_reset();
 }
@@ -133,6 +133,7 @@ void loop()
     des = 0;          //  Time2 = millis ;
     detection();      // every 10 second go to function detection
     mni ++;
+    minyta ++;
   }
 
   if ( mni == 6) {
@@ -140,6 +141,13 @@ void loop()
     if (Timer > 0) {  // 1 minute countdown timer progreva
       Timer--;
     }
+  }
+  if (minyta == 60){
+  minyta = 0;
+    Chas++;
+  }
+  if (Chas == 24){
+    MKrestart();
   }
 }
 
@@ -294,16 +302,16 @@ void detection() {
   //if (heating == true && TempDS[1] > 90) {      // остановить прогрев если температура выше 90 град
   //heatingstop();
   //}
-  oxrana = EEPROM.read(eeAddress);              // считываем память 
-  if (oxrana == 1) {                            // если там "1" 
-    Secury = true;                              // то ставим на охрану 
+  oxrana = EEPROM.read(eeAddress);
+  if (oxrana == 1) {
+    Secury = true;
   }
   else {
     Secury = false;
   }
 
- //Serial.print ("EEPROM  ");    // раскоментировать для проверки записи в еепром
- // Serial.println (oxrana);
+  //Serial.print ("EEPROM  ");    // раскоментировать для проверки записи в еепром
+  //Serial.println (oxrana);
 
 
   if ( analogRead ( Pso_F  ) > 200) {           // для того чтобы было видно открыт ли ЦЗ вне функций lock
@@ -337,20 +345,20 @@ void Data() {
     flagCalm = false;
     MQTT_PUB("s", Secury ? "Alarm" : "Calm" );
   }
-  if (flagData == true) {
+  if (flagData == true) {          
     flagData = false;
     MQTT_PUB("s", heating ? "Start" : "Stop");
     MQTT_FloatPub("timer",    Timer, 0 );
   }
-  if ( flagTemp == true) {
+  if ( flagTemp == true) {          // флаг вызова датчиков температуры
     flagTemp = false;
     ds();
   }
-  if (flagRpm == true) {
+  if (flagRpm == true) {            // флаг вызова оборотов
     flagRpm = false;
     MQTT_FloatPub("RPM", RPM, 0 );
   }
-  if (flagVolt == true) {
+  if (flagVolt == true) {           // флаг вызова акб 
     flagVolt = false;
     MQTT_FloatPub("bat",     Vbat, 2);
   }
@@ -429,7 +437,7 @@ void resp_modem() {
   while (SIM800.available())k = SIM800.read(), at += char(k), delay(1);
   Serial.println(at);
   if (at.indexOf("+CLIP: \"" + call_phone + "\",") > -1) {                  // обработка входящего звонка
-    delay(200), SIM800.println("ATHO");   // ring = false;
+    delay(200), SIM800.println("ATA"), ring = true;
   }
   /* else {
     SIM800.println("ATA");
@@ -690,7 +698,7 @@ void Anti_Hijack() {
   // Serial.println(" ARMED ");
 }
 
-void MKrestart() {                                // функция перезагрузки мк
+void MKrestart() {                              // функция перезагрузки мк
   // Serial.println("Restart");
   digitalWrite(RESET_Pin, HIGH );
 }
