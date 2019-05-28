@@ -133,10 +133,10 @@ void loop()
     des = 0;          //  Time2 = millis ;
     detection();      // every 10 second go to function detection
     mni ++;
-    minyta ++;
   }
 
   if ( mni == 6) {
+    minyta ++;
     mni = 0;
     if (Timer > 0) {  // 1 minute countdown timer progreva
       Timer--;
@@ -556,7 +556,7 @@ void resp_modem() {
   }
 
   else if (at.indexOf("S/Calm", 4) > -1) {            // отключаем охрану
-    void Silence ();
+    Silence ();
   }
 
   else if (at.indexOf("S/Lock", 4) > -1) {            // команда закрытия дверей
@@ -637,7 +637,7 @@ void resp_modem() {
     MQTT_FloatPub("CF", error_CF, 0);
     SIM800.write(0x1A);
     interval = 6;                   // швырнуть данные на сервер и ждать 60 сек
-    //  at = "";                            // Возвращаем ответ модема в монитор порта , очищаем переменную
+    //  at = "";                            // Возвращаем ответ модема в монитор порта , очищаем переменную c закоментированной стабильнее работает
   }
   if (pin.indexOf("123") > -1) {                    // функция автозапуска 
     pin = "";
